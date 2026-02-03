@@ -421,3 +421,6 @@ FodyWeavers.xsd
 venv/
 __pycache__/
 *.pyc
+
+data/
+data/*

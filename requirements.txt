@@ -4,3 +4,4 @@ python-dateutil==2.9.0.post0
 python-dotenv==1.2.1
 six==1.17.0
 zstandard==0.25.0
+zstd==1.5.7.3
