@@ -20,5 +20,6 @@ def decompress_zst_to_csv(zst_file_path, output_csv_path):
 
 zst_file = 'data/zst/xnas-itch-20260130.trades.csv.zst'
 os_output_path = os.path.join('data', 'csv', 'output.csv')
+
 decompress_zst_to_csv(zst_file, os_output_path)
 
