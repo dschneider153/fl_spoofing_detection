@@ -18,8 +18,8 @@ def decompress_zst_to_csv(zst_file_path, output_csv_path):
     df = pd.DataFrame(data_list)
     df.to_csv(output_csv_path, index=False)
 
-zst_file = 'data/zst/xnas-itch-20260130.trades.csv.zst'
-os_output_path = os.path.join('data', 'csv', 'output.csv')
+zst_file = 'data/MBO/zst/xnas-itch-20260107.mbo.csv.zst'
+os_output_path = os.path.join('data', 'MBO', 'csv', 'output.csv')
 
 decompress_zst_to_csv(zst_file, os_output_path)
 
