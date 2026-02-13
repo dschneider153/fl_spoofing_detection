@@ -2,6 +2,7 @@ import csv
 import os
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
 csv_path = os.path.join('data', 'MBO', 'csv', 'output.csv')
 mbo = pd.read_csv(csv_path, sep=",", skiprows=1, dtype={
@@ -50,11 +51,10 @@ def find_order_end_ts(df, order_id, t_add):
     return end_events.index[0]
 
 PRE_MS = pd.Timedelta(milliseconds=500)
-Post_MS = pd.Timedelta(milliseconds=500)
+POST_MS = pd.Timedelta(milliseconds=500)
 
 # Feature extraction script
 rows = []
-debug_stats = {"no_end_found": 0, "cancel": 0, "fill": 0, "trade": 0}
 
 for idx, anchor in anchor_events.iterrows():
     order_id = anchor["order_id"]
@@ -62,7 +62,6 @@ for idx, anchor in anchor_events.iterrows():
 
     t_end = find_order_end_ts(mbo, order_id, t_add)
     if t_end is None:
-        debug_stats["no_end_found"] += 1
         continue
 
     end_event = mbo[
@@ -71,40 +70,41 @@ for idx, anchor in anchor_events.iterrows():
     ].iloc[0]
     
     end_action = end_event["action"]
-    
-    # Tracking all different kinds of 
-    if end_action == "C":
-        debug_stats["cancel"] += 1
-    elif end_action == "F":
-        debug_stats["fill"] += 1
-    elif end_action == "T":
-        debug_stats["trade"] += 1
 
     pre_start = t_add - PRE_MS
-    post_end = t_end + Post_MS
+    post_end = t_end + POST_MS
 
     pre = mbo.loc[pre_start:t_add]
     post = mbo.loc[t_end:post_end]
+    
+    # For relative size only
+    size_fivesec_window = mbo.loc[t_add - pd.Timedelta(seconds=5):t_add]
+    size_fivesec_window = size_fivesec_window[size_fivesec_window["order_id"] != order_id]
+    same_side_window = size_fivesec_window[size_fivesec_window["side"] == anchor["side"]]
+    baseline = same_side_window["size"].median()
+    relative_size = anchor["size"]/max(baseline, 1)
 
     features = {
         "order_id": order_id,
+        # First set of features: Lifecycle/Core Spoofing Features
         "initial_size": anchor["size"],
-        "lifetime_ms": (t_end - t_add).total_seconds() * 1000,
-        "end_action": end_action,
+        "relative_size": relative_size,
+        "log_lifetime": np.log1p((t_end - t_add).total_seconds() * 1000),
+        "ended_with_cancel": int(end_action == "C"),
 
         "pre_add_count": (pre["action"] == "A").sum(),
         "pre_cancel_count": (pre["action"] == "C").sum(),
         "post_cancel_count": (post["action"] == "C").sum(),
-
-        "ended_with_cancel": int(end_action == "C"),
-        "ended_with_fill": int(end_action == "F"),
-        "ended_with_trade": int(end_action == "T"),  # Add this
     }
 
     rows.append(features)
 
-print("Debug stats:", debug_stats)
 features_df = pd.DataFrame(rows)
-print("\nEnd action distribution:")
-print(features_df["end_action"].value_counts())
 print(features_df)
+# features_df.to_csv('features/features.csv')
+
+# Sanity check for relative sizes
+print(features_df["relative_size"].quantile([0.5, 0.75, 0.9, 0.95, 0.99]))
+ax = features_df["relative_size"].hist(bins=20)
+fig = ax.get_figure()
+fig.savefig('features/relativehisto.pdf')
