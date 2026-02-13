@@ -423,5 +423,7 @@ __pycache__/
 *.pyc
 
 data/*
+!data/.gitkeep
 
 features/*
+!features/.gitkeep
