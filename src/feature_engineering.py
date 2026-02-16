@@ -4,12 +4,12 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-csv_path = os.path.join('data', 'MBO', 'csv', 'output.csv')
-mbo = pd.read_csv(csv_path, sep=",", skiprows=1, dtype={
+mbo_csv_path = os.path.join('data', 'MBO', 'csv', 'output.csv')
+mbo = pd.read_csv(mbo_csv_path, sep=",", skiprows=1, dtype={
         "ts_recv": "string",
         "ts_event": "string",
         "publisher_id": "int32",
-        "instrument_id": "int32",
+        "instrument_id": "int64",
         "action": "category",
         "side": "category",
         "price": "float64",
@@ -22,9 +22,17 @@ mbo = pd.read_csv(csv_path, sep=",", skiprows=1, dtype={
         "symbol": "category",
     })
 
+mbp10_csv_path = os.path.join('data', 'MBP-10', 'csv', 'output.csv')
+mbp10 = pd.read_csv(mbp10_csv_path, sep=',', skiprows=1)
+
 mbo = mbo.sort_values("ts_event")
 mbo["ts_recv"] = pd.to_datetime(mbo["ts_recv"], utc=True)
 mbo["ts_event"] = pd.to_datetime(mbo["ts_event"], utc=True)
+
+mbp10 = mbp10.sort_values("ts_event")
+mbp10["ts_recv"] = pd.to_datetime(mbp10["ts_recv"], utc=True)
+mbp10["ts_event"] = pd.to_datetime(mbp10["ts_event"], utc=True)
+mbp10 = mbp10.rename(columns={"ts_event": "ts_book"})
 
 def extract_anchor_events(df):
     suspect_size_threshold = (df["size"].mean()) * 2
@@ -32,9 +40,13 @@ def extract_anchor_events(df):
     return anchor_events
 
 anchor_events = extract_anchor_events(mbo)
-print(anchor_events)
 
-#Prequesite for following function
+max_book_lag = pd.Timedelta(milliseconds=100)
+anchor_events_with_mbp = pd.merge_asof(anchor_events, mbp10, left_on="ts_event", right_on="ts_book", by="instrument_id", direction='backward', suffixes=("", "_book"))
+anchor_events_with_mbp = anchor_events_with_mbp[anchor_events_with_mbp["ts_event"] - anchor_events_with_mbp["ts_book"] <= max_book_lag]
+print(anchor_events, anchor_events_with_mbp, anchor_events_with_mbp.columns)
+
+# Required for following function
 mbo = mbo.set_index("ts_event")
 
 #Fuction that helps find the end of one anchor event(cancel/execute)
@@ -43,55 +55,69 @@ def find_order_end_ts(df, order_id, t_add):
         (df["order_id"] == order_id) &
         (df.index > t_add)
     ]
-
     end_events = events[events["action"].isin(["C", "F", "T"])]
     if end_events.empty:
         return None
-    
     return end_events.index[0]
 
 PRE_MS = pd.Timedelta(milliseconds=500)
 POST_MS = pd.Timedelta(milliseconds=500)
 
+tick_size = (mbo["price"].sort_values().diff().dropna().loc[lambda x: x > 0].min())
+ 
 # Feature extraction script
 rows = []
+for idx, anchor in anchor_events_with_mbp.iterrows():
 
-for idx, anchor in anchor_events.iterrows():
     order_id = anchor["order_id"]
     t_add = anchor["ts_event"]
-
+    anchor_price = anchor["price"]
+    side = anchor["side"]
+    best_bid = anchor["bid_px_00"]
+    best_ask = anchor["ask_px_00"]
     t_end = find_order_end_ts(mbo, order_id, t_add)
     if t_end is None:
         continue
-
     end_event = mbo[
         (mbo["order_id"] == order_id) &
         (mbo.index == t_end)
     ].iloc[0]
-    
     end_action = end_event["action"]
 
     pre_start = t_add - PRE_MS
     post_end = t_end + POST_MS
-
     pre = mbo.loc[pre_start:t_add]
     post = mbo.loc[t_end:post_end]
     
-    # For relative size only
+    # For relative:
     size_fivesec_window = mbo.loc[t_add - pd.Timedelta(seconds=5):t_add]
     size_fivesec_window = size_fivesec_window[size_fivesec_window["order_id"] != order_id]
     same_side_window = size_fivesec_window[size_fivesec_window["side"] == anchor["side"]]
     baseline = same_side_window["size"].median()
     relative_size = anchor["size"]/max(baseline, 1)
 
+    # For position:
+    if side == "B":
+        distance_ticks = (best_bid - anchor["price"]) / tick_size
+    else:
+        distance_ticks = (anchor["price"] - best_ask) / tick_size
+
     features = {
+        # General information on the anchor
         "order_id": order_id,
-        # First set of features: Lifecycle/Core Spoofing Features
         "initial_size": anchor["size"],
+        "anchor_price": anchor_price,
+        "side": side,
+        # First set of features: Lifecycle/Core Spoofing Features
         "relative_size": relative_size,
         "log_lifetime": np.log1p((t_end - t_add).total_seconds() * 1000),
         "ended_with_cancel": int(end_action == "C"),
+        # Second set of features: Position of the anchor
+        "distance_ticks": distance_ticks,
+        "best_bid": best_bid,
+        "best_ask": best_ask,
 
+        # Fourth set of features: Context
         "pre_add_count": (pre["action"] == "A").sum(),
         "pre_cancel_count": (pre["action"] == "C").sum(),
         "post_cancel_count": (post["action"] == "C").sum(),
@@ -100,11 +126,34 @@ for idx, anchor in anchor_events.iterrows():
     rows.append(features)
 
 features_df = pd.DataFrame(rows)
+
+# Clean up Dataframe
+features_df = features_df[features_df["distance_ticks"] <= 200]
+
 print(features_df)
-# features_df.to_csv('features/features.csv')
+features_df.to_csv('features/features.csv')
 
 # Sanity check for relative sizes
-print(features_df["relative_size"].quantile([0.5, 0.75, 0.9, 0.95, 0.99]))
+'''print(features_df["relative_size"].quantile([0.5, 0.75, 0.9, 0.95, 0.99]))
 ax = features_df["relative_size"].hist(bins=20)
 fig = ax.get_figure()
-fig.savefig('features/relativehisto.pdf')
+fig.savefig('features/relativehisto.pdf')'''
+
+# Sanity check for distance in ticks
+'''print(tick_size)
+print((anchor_events_with_mbp["ts_event"] - anchor_events_with_mbp["ts_book"]).describe())
+print(features_df.nlargest(10, "distance_ticks"))
+print(features_df["distance_ticks"].quantile([0.5, 0.75, 0.9, 0.95, 0.99]))
+row = features_df.nlargest(1, "distance_ticks").iloc[0]
+print(row[[
+    "order_id",
+    "side",
+    "anchor_price",
+    "best_bid",
+    "best_ask",
+    "distance_ticks"
+]])
+print(abs(anchor_price - row["best_bid"]) / tick_size)
+ax = features_df["distance_ticks"].hist(bins=50)
+fig = ax.get_figure()
+fig.savefig('features/distancehisto.pdf')'''
