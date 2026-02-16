@@ -64,8 +64,42 @@ PRE_MS = pd.Timedelta(milliseconds=500)
 POST_MS = pd.Timedelta(milliseconds=500)
 
 tick_size = (mbo["price"].sort_values().diff().dropna().loc[lambda x: x > 0].min())
- 
+
 # Feature extraction script
+# First step: Vectorized feature extraction
+# Distance ticks
+anchor_events_with_mbp["distance_ticks"] = np.where(
+    anchor_events_with_mbp["side"] == "B",   # Buy order
+    (anchor_events_with_mbp["bid_px_00"] - anchor_events_with_mbp["price"]) / tick_size,
+    (anchor_events_with_mbp["price"] - anchor_events_with_mbp["ask_px_00"]) / tick_size
+)
+# Spread normalized distance
+spread_ticks = (
+    ((anchor_events_with_mbp["ask_px_00"] - anchor_events_with_mbp["bid_px_00"]) / tick_size).clip(lower=1)
+)
+anchor_events_with_mbp["spread_normalized_distance"] = (
+    anchor_events_with_mbp["distance_ticks"] / spread_ticks
+)
+# Book Depth
+bid_px = anchor_events_with_mbp[[f"bid_px_0{i}" for i in range(10)]].values
+bid_sz = anchor_events_with_mbp[[f"bid_sz_0{i}" for i in range(10)]].values
+ask_px = anchor_events_with_mbp[[f"ask_px_0{i}" for i in range(10)]].values
+ask_sz = anchor_events_with_mbp[[f"ask_sz_0{i}" for i in range(10)]].values
+anchor_price = anchor_events_with_mbp["price"].values
+side = anchor_events_with_mbp["side"].values
+buy_mask = bid_px >= anchor_price[:,None]
+sell_mask = ask_px >= anchor_price[:,None]
+depth_buy = (buy_mask * bid_sz).sum(axis=1)
+depth_sell = (sell_mask * ask_sz).sum(axis=1)
+anchor_events_with_mbp["depth_volume"] = np.where (
+    side == "B",
+    depth_buy,
+    depth_sell
+)
+anchor_events_with_mbp["depth_ratio"] = (
+    anchor_events_with_mbp["depth_volume"] / anchor_events_with_mbp["size"]
+)
+# Second step: Feature loop
 rows = []
 for idx, anchor in anchor_events_with_mbp.iterrows():
 
@@ -73,8 +107,14 @@ for idx, anchor in anchor_events_with_mbp.iterrows():
     t_add = anchor["ts_event"]
     anchor_price = anchor["price"]
     side = anchor["side"]
+
     best_bid = anchor["bid_px_00"]
     best_ask = anchor["ask_px_00"]
+    distance_ticks = anchor["distance_ticks"]
+    spread_normalized_distance = anchor["spread_normalized_distance"]
+    depth_volume = anchor["depth_volume"]
+    depth_ratio = anchor["depth_ratio"]
+
     t_end = find_order_end_ts(mbo, order_id, t_add)
     if t_end is None:
         continue
@@ -96,12 +136,6 @@ for idx, anchor in anchor_events_with_mbp.iterrows():
     baseline = same_side_window["size"].median()
     relative_size = anchor["size"]/max(baseline, 1)
 
-    # For position:
-    if side == "B":
-        distance_ticks = (best_bid - anchor["price"]) / tick_size
-    else:
-        distance_ticks = (anchor["price"] - best_ask) / tick_size
-
     features = {
         # General information on the anchor
         "order_id": order_id,
@@ -113,9 +147,13 @@ for idx, anchor in anchor_events_with_mbp.iterrows():
         "log_lifetime": np.log1p((t_end - t_add).total_seconds() * 1000),
         "ended_with_cancel": int(end_action == "C"),
         # Second set of features: Position of the anchor
-        "distance_ticks": distance_ticks,
         "best_bid": best_bid,
         "best_ask": best_ask,
+        "distance_ticks": distance_ticks,
+        "spread_normalized_distance": spread_normalized_distance,
+        "depth_volume": depth_volume,
+        "depth_ratio": depth_ratio,
+        # Third set of features: Impact of the anchor
 
         # Fourth set of features: Context
         "pre_add_count": (pre["action"] == "A").sum(),
@@ -157,3 +195,4 @@ print(abs(anchor_price - row["best_bid"]) / tick_size)
 ax = features_df["distance_ticks"].hist(bins=50)
 fig = ax.get_figure()
 fig.savefig('features/distancehisto.pdf')'''
+print(features_df[["distance_ticks", "spread_normalized_distance", "depth_volume", "depth_ratio"]].describe())
