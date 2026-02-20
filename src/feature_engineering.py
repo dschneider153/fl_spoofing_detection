@@ -155,11 +155,13 @@ for idx, anchor in anchor_events_with_mbp.iterrows():
     spread_normalized_distance = anchor["spread_normalized_distance"]
     depth_volume = anchor["depth_volume"]
     depth_ratio = anchor["depth_ratio"]
-
+    
+    midprice_at_start = get_midprice_at(mbp10, t_add)
     midprice_at_end = get_midprice_at(mbp10, t_end)
     midprice_after_50ms = get_midprice_at(mbp10, t_end + pd.Timedelta(milliseconds=50))
     midprice_after_200ms = get_midprice_at(mbp10, t_end + pd.Timedelta(milliseconds=200))
     midprice_after_1000ms = get_midprice_at(mbp10, t_end + pd.Timedelta(milliseconds=1000))
+    midprice_change_during = midprice_at_end - midprice_at_start
     midprice_change_50ms = midprice_after_50ms - midprice_at_end
     midprice_change_200ms = midprice_after_200ms - midprice_at_end
     midprice_change_1000ms = midprice_after_1000ms - midprice_at_end
@@ -186,6 +188,7 @@ for idx, anchor in anchor_events_with_mbp.iterrows():
         "depth_volume": depth_volume,
         "depth_ratio": depth_ratio,
         # Third set of features: Impact of the anchor
+        "midprice_change_during": midprice_change_during,
         "midprice_change_50ms": midprice_change_50ms,
         "midprice_change_200ms": midprice_change_200ms,
         "midprice_change_1000ms": midprice_change_1000ms,
@@ -249,4 +252,5 @@ print(features_df["order_book_imbalance_shift"].describe())
 print(features_df["order_book_imbalance_shift"].abs().quantile([0.5, 0.75, 0.9, 0.99]))
 print(features_df["spread_change_ticks"].describe())
 print(features_df["spread_change_ticks"].abs().quantile([0.5, 0.75, 0.9, 0.99]))
-print(features_df.nlargest(3, "spread_change_ticks")[["order_id","best_bid", "best_ask", "spread_change_ticks"]])'''
+print(features_df.nlargest(3, "spread_change_ticks")[["order_id","best_bid", "best_ask", "spread_change_ticks"]])
+print(features_df["midprice_change_during"].describe())'''
