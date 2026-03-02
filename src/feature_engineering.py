@@ -192,6 +192,7 @@ for idx, anchor in anchor_events_with_mbp.iterrows():
         "midprice_change_50ms": midprice_change_50ms,
         "midprice_change_200ms": midprice_change_200ms,
         "midprice_change_1000ms": midprice_change_1000ms,
+        "price_reversion": (midprice_change_during * midprice_change_1000ms),
         "signed_impact": (side_sign * (midprice_after_1000ms - midprice_at_end) / tick_size), 
         "post_trade_count": (post_mbo.shape[0]),
         "order_book_imbalance_shift": imbalance_shift,
