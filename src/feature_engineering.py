@@ -4,11 +4,25 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-mbo_csv_path = os.path.join('data', 'MBO', 'csv', 'output.csv')
-mbo = pd.read_csv(mbo_csv_path, sep=",", skiprows=1, dtype={
+def clean_csv(path, index_col=None):
+    df = pd.read_csv(path, skiprows=1, header=0)
+    # Remove duplicate header rows by checking first column
+    first_col = df.columns[0]
+    df = df[df[first_col] != first_col].reset_index(drop=True)
+    skip_cols = {"ts_recv", "ts_event", "action", "side", "symbol"}
+    for col in df.columns:
+        if col not in skip_cols:
+            converted = pd.to_numeric(df[col], errors="coerce")
+            if converted.notna().sum() >= len(converted) * 0.9:
+                df[col] = converted
+    return df
+
+mbo_csv_path = os.path.join('data', 'MBO', 'csv', 'combined_output_january.csv')
+mbo = clean_csv(mbo_csv_path)
+mbo = mbo.astype({
         "ts_recv": "string",
         "ts_event": "string",
-        "publisher_id": "int32",
+        "publisher_id": "int64",
         "instrument_id": "int64",
         "action": "category",
         "side": "category",
@@ -22,8 +36,8 @@ mbo = pd.read_csv(mbo_csv_path, sep=",", skiprows=1, dtype={
         "symbol": "category",
     })
 
-mbp10_csv_path = os.path.join('data', 'MBP-10', 'csv', 'output.csv')
-mbp10 = pd.read_csv(mbp10_csv_path, sep=',', skiprows=1)
+mbp10_csv_path = os.path.join('data', 'MBP-10', 'csv', 'combined_output_january.csv')
+mbp10 = clean_csv(mbp10_csv_path)
 
 mbo = mbo.sort_values("ts_event")
 mbo["ts_recv"] = pd.to_datetime(mbo["ts_recv"], utc=True)
@@ -211,7 +225,7 @@ features_df = pd.DataFrame(rows)
 features_df = features_df[features_df["distance_ticks"] <= 200]
 
 print(features_df)
-features_df.to_csv('features/features.csv')
+features_df.to_csv('features/features_january.csv')
 
 # Sanity check for relative sizes
 '''print(features_df["relative_size"].quantile([0.5, 0.75, 0.9, 0.95, 0.99]))

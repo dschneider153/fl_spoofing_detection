@@ -4,13 +4,16 @@ fonttools==4.61.1
 kiwisolver==1.4.9
 matplotlib==3.10.8
 numpy==2.4.2
+nvidia-nccl-cu12==2.29.3
 packaging==26.0
 pandas==3.0.0
 pillow==12.1.1
 pyparsing==3.3.2
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.1
+scipy==1.17.1
 seaborn==0.13.2
 six==1.17.0
+xgboost==3.2.0
 zstandard==0.25.0
 zstd==1.5.7.3

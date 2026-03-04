@@ -427,3 +427,6 @@ data/*
 
 features/*
 !features/.gitkeep
+
+src/sanity_check.py
+src/feature_engineering.py
