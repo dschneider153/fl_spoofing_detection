@@ -196,7 +196,15 @@ anchor_events_with_mbp["order_book_imbalance_shift"] = anchor_events_with_mbp["i
 midprice_at_end = vectorized_midprice(t_end_arr)
 midprice_after_1000ms = vectorized_midprice(t_end_arr + ms1000)
 side_sign = np.where(anchor_events_with_mbp["side"] == "B", 1, -1)
-anchor_events_with_mbp["signed_impact"] = side_sign * ((midprice_after_1000ms - midprice_at_end) / TICK_SIZE)
+anchor_events_with_mbp["signed_impact_after"] = side_sign * ((midprice_after_1000ms - midprice_at_end) / TICK_SIZE)
+# Signed impact for midprice change during for prive attraction
+anchor_events_with_mbp["signed_impact_during"] = side_sign *((anchor_events_with_mbp["midprice_change_during"]) / TICK_SIZE)
+# Normalized attraction
+anchor_events_with_mbp["attraction_ratio"] = np.where(
+    anchor_events_with_mbp["distance_ticks"].abs() > 5, # less than 5 ticks distance cant produce any meaningful attraction
+    anchor_events_with_mbp["signed_impact_during"] / anchor_events_with_mbp["distance_ticks"].abs(),
+    np.nan
+)
 
 # Relative size (core feature)
 mbo_adds = mbo[mbo["action"] == "A"].reset_index()[["ts_event", "order_id", "side", "size"]]
@@ -261,7 +269,7 @@ features_df = anchor_events_with_mbp[[
     "bid_px_00", "ask_px_00", "distance_ticks", "spread_normalized_distance",
     "depth_volume", "depth_ratio",
     "midprice_change_during", "midprice_change_50ms", "midprice_change_200ms",
-    "midprice_change_1000ms", "price_reversion", "signed_impact",
+    "midprice_change_1000ms", "price_reversion", "signed_impact_during", "signed_impact_after", "attraction_ratio",
     "post_trade_count", "order_book_imbalance_shift", "spread_change_ticks",
     "pre_add_count", "pre_cancel_count", "post_cancel_count",
 ]].rename(columns={"size": "initial_size", "price": "anchor_price", "bid_px_00": "best_bid", "ask_px_00": "best_ask"}).copy()
