@@ -11,18 +11,17 @@ import xgboost as xgb
 from xgboost import (XGBClassifier, plot_importance)
 import matplotlib.pyplot as plt
 
-df = pd.read_csv('data/Training and Testing/largedataset.csv')
+df = pd.read_csv('data/Training and Testing/test_january.csv')
 df["ts_event"] = pd.to_datetime(df["ts_event"])
 df = df.sort_values("ts_event")
 df["side"] = df["side"].map({"bid": 0, "ask": 1})
 
-# Dropping labeling features here
 ###########################
-df = df.drop(["spoofing_score", "distance_ticks", "order_id", "spread_normalized_distance"], axis=1)
+df = df.drop(["order_id", "spoof_prob", "ended_with_cancel", "distance_ticks", "spread_normalized_distance", "log_lifetime", "relative_size"], axis=1)
 ###########################
 
-X = df.drop(columns=["is_spoofing","ts_event"])
-Y = df["is_spoofing"]
+X = df.drop(columns=["weak_label","ts_event"])
+Y = df["weak_label"]
 # Split training and test between 
 split_date = df["ts_event"].quantile(0.75)
 train_idx = df["ts_event"] < split_date

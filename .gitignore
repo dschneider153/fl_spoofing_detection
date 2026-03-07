@@ -418,9 +418,10 @@ FodyWeavers.xsd
 *.msp
 
 .env
-venv/
+.venv/
 __pycache__/
 *.pyc
+
 
 data/*
 !data/.gitkeep
@@ -430,3 +431,4 @@ features/*
 
 src/sanity_check.py
 src/feature_engineering.py
+
