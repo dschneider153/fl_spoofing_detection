@@ -432,3 +432,5 @@ features/*
 src/sanity_check.py
 src/feature_engineering.py
 
+final_model.json
+federated_final_model.json

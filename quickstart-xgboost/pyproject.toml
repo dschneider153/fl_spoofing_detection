@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fl-spoofing-detection"
+version = "1.0.0"
+description = "Federated Spoofing Detection with XGBoost and Flower"
+license = "Apache-2.0"
+dependencies = [
+    "flwr[simulation]>=1.26.1",
+    "xgboost>=2.0.0",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "scikit-learn>=1.3.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[tool.flwr.app]
+publisher = "dschneider"
+
+[tool.flwr.app.components]
+serverapp = "quickstart_xgboost.server_app:app"
+clientapp = "quickstart_xgboost.client_app:app"
+
+[tool.flwr.app.config]
+num-server-rounds = 5
+fraction-train = 0.5
+fraction-evaluate = 0.5
+local-epochs = 1
+
+# XGBoost parameters matching baseline
+params.objective = "binary:logistic"
+params.eta = 0.05
+params.max-depth = 4
+params.eval-metric = "aucpr"
+params.nthread = 16
+params.num-parallel-tree = 1
+params.subsample = 0.8   
+params.colsample-bytree = 0.8
+params.min-child-weight = 5
+params.gamma = 0.1
+params.tree-method = "hist"
+
+[tool.flwr.federation]
+options.num-supernodes = 10
