@@ -1,28 +1,40 @@
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
-    roc_auc_score,
-    average_precision_score,
+    precision_score,
+    recall_score,
+    f1_score,
     precision_recall_curve,
-    classification_report
 )
 from sklearn.model_selection import (train_test_split, TimeSeriesSplit)
 import xgboost as xgb
 from xgboost import (XGBClassifier, plot_importance)
 import matplotlib.pyplot as plt
 
+# Loading data and mapping the bid/ask side to a number
 df = pd.read_csv('data/Training and Testing/test_january.csv')
 df["ts_event"] = pd.to_datetime(df["ts_event"])
 df = df.sort_values("ts_event")
 df["side"] = df["side"].map({"bid": 0, "ask": 1})
 
-###########################
-df = df.drop(["order_id", "spoof_prob", "ended_with_cancel", "distance_ticks", "spread_normalized_distance", "log_lifetime", "relative_size"], axis=1)
-###########################
+CLEAN_FEATURES = [
+    "initial_size",
+    "anchor_price",
+    "best_bid",
+    "best_ask", 
+    "distance_ticks",
+    "spread_normalized_distance",
+    "pre_add_count",
+    "pre_cancel_count",
+    "relative_size",
+    "depth_ratio",
+    "depth_volume"
+]
 
-X = df.drop(columns=["weak_label","ts_event"])
+# Splitting data
+X = df[CLEAN_FEATURES]
 Y = df["weak_label"]
-# Split training and test between 
+# Split training and test 
 split_date = df["ts_event"].quantile(0.75)
 train_idx = df["ts_event"] < split_date
 test_idx = df["ts_event"] >= split_date
@@ -33,11 +45,11 @@ y_train, y_test = Y[train_idx], Y[test_idx]
 n_pos = y_train.sum()
 n_neg = len(y_train) - n_pos
 
+# Weight for potential class imbalance
 scale_pos_weight = n_neg / n_pos
 print("scale_pos_weight: ", scale_pos_weight)
 
-tscv = TimeSeriesSplit(n_splits=5)
-
+# Parameter setting for model
 def build_model(scale_pos_weight):
     return XGBClassifier(
         n_estimators=500,
@@ -54,9 +66,10 @@ def build_model(scale_pos_weight):
         early_stopping_rounds=30,
     )
 
+tscv = TimeSeriesSplit(n_splits=5)
 cv_scores = []
 
-# Initial training is split into several windows for time series cross validation
+# Time Series Cross Validation loop
 for fold, (train_i, val_i) in enumerate(tscv.split(X_train)):
     
     X_tr, X_val = X_train.iloc[train_i], X_train.iloc[val_i]
@@ -72,15 +85,17 @@ for fold, (train_i, val_i) in enumerate(tscv.split(X_train)):
     )
 
     y_pred_proba = model.predict_proba(X_val)[:, 1]
+    y_pred_binary = (y_pred_proba >= 0.5).astype(int)
 
-    pr_auc = average_precision_score(Y_val, y_pred_proba)
-    roc_auc = roc_auc_score(Y_val, y_pred_proba)
+    fold_precision = precision_score(Y_val, y_pred_binary)
+    fold_recall = recall_score(Y_val, y_pred_binary)
+    fold_f1 = f1_score(Y_val, y_pred_binary)
 
-    cv_scores.append(pr_auc)
+    cv_scores.append(fold_f1)
 
-    print(f"Fold {fold} PR-AUC: {pr_auc:.4f}, ROC-AUC: {roc_auc:.4f}")
+    print(f"Fold {fold} --> Precision: {fold_precision:.4f}, Recall: {fold_recall:.4f}, F1: {fold_f1:.4f}")
 
-print("Mean CV PR-AUC:", np.mean(cv_scores))
+print("Mean CV F1:", np.mean(cv_scores))
 
 # Final training
 final_model = build_model(scale_pos_weight)
@@ -88,24 +103,17 @@ final_model.set_params(early_stopping_rounds=None)
 final_model.fit(X_train, y_train)
 # Final Test
 y_test_proba = final_model.predict_proba(X_test)[:, 1]
-pr_auc_test = average_precision_score(y_test, y_test_proba)
-roc_auc_test = roc_auc_score(y_test, y_test_proba)
-print("TEST PR-AUC:", pr_auc_test)
-print("TEST ROC-AUC:", roc_auc_test)
 
 precision, recall, thresholds = precision_recall_curve(y_test, y_test_proba)
-f1_scores = 2 * (precision * recall) / (precision + recall + 1e-10)
-best_idx = np.argmax(f1_scores)
-best_threshold = thresholds[best_idx]
+f1_scores = 2 * (precision[:-1] * recall[:-1]) / (precision[:-1] + recall[:-1] + 1e-10)
+# F1-Score needs threshold, but XGBoost uses probabilities so we need to find the best threshold
+best_threshold = thresholds[np.argmax(f1_scores)]
 print("Best threshold:", best_threshold)
+
 y_test_pred = (y_test_proba >= best_threshold).astype(int)
-print(classification_report(y_test, y_test_pred))
 
-top_k = int(0.01 * len(y_test))
-sorted_idx = np.argsort(-y_test_proba)
-top_idx = sorted_idx[:top_k]
-precision_top1 = y_test.iloc[top_idx].mean()
-print("Precision@1%:", precision_top1)
-
-ax = plot_importance(final_model, max_num_features=10)
-ax.figure.savefig('features/plot_importance.pdf')
+# Final Precision, Recall and F1-Score 
+test_precision = precision_score(y_test, y_test_pred)
+test_recall = recall_score(y_test, y_test_pred)
+test_f1 = f1_score(y_test, y_test_pred)
+print(f"Final evaluation --> Precision: {test_precision:.4f}, Recall: {test_recall:.4f}, F1: {test_f1:.4f}")

@@ -28,8 +28,8 @@ clientapp = "quickstart_xgboost.client_app:app"
 [tool.flwr.app.config]
 num-server-rounds = 5
 fraction-train = 0.5
-fraction-evaluate = 0.5
-local-epochs = 1
+fraction-evaluate = 1.0
+local-epochs = 20
 
 # XGBoost parameters matching baseline
 params.objective = "binary:logistic"
@@ -43,6 +43,7 @@ params.colsample-bytree = 0.8
 params.min-child-weight = 5
 params.gamma = 0.1
 params.tree-method = "hist"
+params.seed = 42
 
 [tool.flwr.federation]
 options.num-supernodes = 10

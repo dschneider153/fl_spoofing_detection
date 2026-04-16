@@ -10,7 +10,7 @@ print(df)
 df["side"] = ((df["side"] == "B").astype(int))
 corr_matrix = df.corr()
 
-plt.figure(figsize=(10,8))
+plt.figure(figsize=(12,12))
 heatmap = sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt=".2f")
 fig = heatmap.get_figure()
 fig.savefig('features/corr_matrix.pdf')

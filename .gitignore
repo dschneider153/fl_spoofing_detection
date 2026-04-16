@@ -429,8 +429,8 @@ data/*
 features/*
 !features/.gitkeep
 
-src/sanity_check.py
 src/feature_engineering.py
+src/heuristics_labeling.py
 
 final_model.json
 federated_final_model.json

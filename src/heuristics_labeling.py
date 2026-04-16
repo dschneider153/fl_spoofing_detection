@@ -40,10 +40,3 @@ print(features_df[features_df['spoofing_score'] < 0.3][
     ['relative_size', 'distance_ticks', 'log_lifetime', 
      'ended_with_cancel', 'midprice_change_1000ms']
 ].head(10))
-
-print(features_df.groupby('is_spoofing')['signed_impact_after'].describe())
-print(features_df.groupby('is_spoofing')['order_book_imbalance_shift'].describe())
-print(features_df.groupby('is_spoofing')['spread_change_ticks'].describe())
-
-print(abs(features_df['midprice_change_1000ms']).describe())
-print((features_df['price_reversion']).describe())

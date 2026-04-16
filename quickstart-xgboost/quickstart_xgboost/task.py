@@ -10,6 +10,20 @@ from flwr_datasets.partitioner import IidPartitioner
 DATA_PATH = "/home/dschneider/github/fl_spoofing_detection/data/Training and Testing/test_january.csv"
 _cached_df = None
 
+CLEAN_FEATURES = [
+    "initial_size",
+    "anchor_price",
+    "best_bid",
+    "best_ask", 
+    "distance_ticks",
+    "spread_normalized_distance",
+    "relative_size",
+    "pre_add_count",
+    "pre_cancel_count",
+    "depth_ratio",
+    "depth_volume"
+]
+
 def load_dataframe():
     global _cached_df
     if _cached_df is None:
@@ -24,7 +38,7 @@ def load_data(partition_id: int, num_clients: int):
     # Load dataframe with function
     df = load_dataframe()
 
-    # Logic for loading time-series based partitions, could and will be changed to isntrument-/symbol-based partitions
+    # Logic for loading time-series based partitions, could be changed to instrument-/symbol-based partitions
     # For now, each client gets a consecutive time slice (preserves temporal order)
     n = len(df)
     partition_size = n // num_clients
@@ -33,15 +47,20 @@ def load_data(partition_id: int, num_clients: int):
     partition = df.iloc[start:end].copy()
 
     # Now split partitions into Train and Test (not a seperate function)
-    split_date = df["ts_event"].quantile(0.75)
+    split_date = partition["ts_event"].quantile(0.75)
     train_mask = partition["ts_event"] < split_date
     test_mask = partition["ts_event"] >= split_date
 
-    feature_cols = [c for c in partition.columns if c not in ["weak_label", "ts_event"]]
+    # Loads same features as in baseline
+    missing = [c for c in CLEAN_FEATURES if c not in partition.columns]
+    if missing:
+        raise ValueError(f"Missing features: {missing}")
 
-    X_train = partition.loc[train_mask, feature_cols].values.astype(np.float32)
+    partition = partition[CLEAN_FEATURES + ["weak_label", "ts_event"]]
+
+    X_train = partition.loc[train_mask, CLEAN_FEATURES].values.astype(np.float32)
     y_train = partition.loc[train_mask, "weak_label"].values.astype(np.float32)
-    X_test = partition.loc[test_mask, feature_cols].values.astype(np.float32)
+    X_test = partition.loc[test_mask, CLEAN_FEATURES].values.astype(np.float32)
     y_test = partition.loc[test_mask, "weak_label"].values.astype(np.float32)
     train_dmatrix = xgb.DMatrix(X_train, label=y_train)
     valid_dmatrix = xgb.DMatrix(X_test, label=y_test)

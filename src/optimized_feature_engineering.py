@@ -9,10 +9,12 @@ PRE_MS = pd.Timedelta(milliseconds=500)
 POST_MS = pd.Timedelta(milliseconds=500)
 
 def clean_csv(path, index_col=None):
-    df = pd.read_csv(path, skiprows=1, header=0)
-    # Remove duplicate header rows by checking first column
+    df = pd.read_csv(path, header=0)
+    # Remove duplicate header rows by checking first column with whitespace checking
     first_col = df.columns[0]
     df = df[df[first_col] != first_col].reset_index(drop=True)
+    df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+    df.columns = df.columns.str.strip()
     skip_cols = {"ts_recv", "ts_event", "action", "side", "symbol"}
     for col in df.columns:
         if col not in skip_cols:
@@ -21,12 +23,19 @@ def clean_csv(path, index_col=None):
                 df[col] = converted
     return df
 
-mbo_csv_path = os.path.join('data', 'MBO', 'csv', 'combined_output_january.csv')
+mbo_csv_path = os.path.join('data', 'MBO', 'csv', 'combined_output_january')
 mbo = clean_csv(mbo_csv_path)
 
-TICK_SIZE = (mbo["price"].sort_values().diff().dropna().loc[lambda x: x > 0].min())
+if(
+    (mbo["price"].sort_values().diff().dropna().loc[lambda x: x > 0].min()) <= 0
+):
+    TICK_SIZE = 0.005
+else:
+    TICK_SIZE = (mbo["price"].sort_values().diff().dropna().loc[lambda x: x > 0].min())
 
-mbp10_csv_path = os.path.join('data', 'MBP-10', 'csv', 'combined_output_january.csv')
+
+
+mbp10_csv_path = os.path.join('data', 'NVIDIA_TEST', 'nvidia_mbp-10.csv')
 mbp10 = clean_csv(mbp10_csv_path)
 
 mbo = mbo.sort_values("ts_event")
@@ -57,7 +66,7 @@ mbp10["imbalance"] = ((mbp10["bid_sz_00"] - mbp10["ask_sz_00"]) / (mbp10["bid_sz
 # Spread
 mbp10["spread"] = (mbp10["ask_px_00"] - mbp10["bid_px_00"])
 
-max_book_lag = pd.Timedelta(milliseconds=100)
+MAX_BOOK_LAG = pd.Timedelta(milliseconds=100)
 anchor_events_with_mbp = pd.merge_asof(
     anchor_events, 
     mbp10, 
@@ -67,7 +76,7 @@ anchor_events_with_mbp = pd.merge_asof(
     direction='backward', 
     suffixes=("", "_book")
 )
-anchor_events_with_mbp = anchor_events_with_mbp[anchor_events_with_mbp["ts_event"] - anchor_events_with_mbp["ts_book"] <= max_book_lag]
+anchor_events_with_mbp = anchor_events_with_mbp[anchor_events_with_mbp["ts_event"] - anchor_events_with_mbp["ts_book"] <= MAX_BOOK_LAG]
 
 mbo = mbo.set_index("ts_event").sort_index()
 mbp10 = mbp10.set_index("ts_book").sort_index()
@@ -198,7 +207,7 @@ midprice_after_1000ms = vectorized_midprice(t_end_arr + ms1000)
 side_sign = np.where(anchor_events_with_mbp["side"] == "B", 1, -1)
 anchor_events_with_mbp["signed_impact_after"] = side_sign * ((midprice_after_1000ms - midprice_at_end) / TICK_SIZE)
 # Signed impact for midprice change during for prive attraction
-anchor_events_with_mbp["signed_impact_during"] = side_sign *((anchor_events_with_mbp["midprice_change_during"]) / TICK_SIZE)
+anchor_events_with_mbp["signed_impact_during"] = side_sign * ((anchor_events_with_mbp["midprice_change_during"]) / TICK_SIZE)
 # Normalized attraction
 anchor_events_with_mbp["attraction_ratio"] = np.where(
     anchor_events_with_mbp["distance_ticks"].abs() > 5, # less than 5 ticks distance cant produce any meaningful attraction
@@ -245,13 +254,15 @@ anchor_events_with_mbp["relative_size"] = (
 mbo_index = mbo.index.values
 mbo_action = mbo["action"].values
 
+# Replaced the count function with a vectorized
 def count_actions_in_window(t_start_arr, t_end_arr, target_action):
-    counts = np.empty(len(t_start_arr), dtype=np.int32)
-    for i, (t0, t1) in enumerate(zip(t_start_arr, t_end_arr)):
-        lo = mbo_index.searchsorted(t0)
-        hi = mbo_index.searchsorted(t1, side="right")
-        counts[i] = (mbo_action[lo:hi] == target_action).sum()
-    return np.array(counts)
+    mask = mbo_action == target_action
+    masked_index = mbo_index[mask]
+    counts = (
+        np.searchsorted(masked_index, t_end_arr, side='right') - 
+        np.searchsorted(masked_index, t_start_arr, side='left')
+    )
+    return counts
 
 pre_starts = (anchor_events_with_mbp.index - PRE_MS).values
 t_adds = anchor_events_with_mbp.index.values
@@ -280,4 +291,47 @@ features_df = features_df[features_df["distance_ticks"] <= 1000]
 features_df = features_df[features_df["spread_change_ticks"] <= 100]
 features_df.to_csv('features/features_january.csv')
 
-print(TICK_SIZE)    
+# Sanity checks
+'''
+# Sanity check for relative sizes
+print(features_df["relative_size"].quantile([0.5, 0.75, 0.9, 0.95, 0.99]))
+ax = features_df["relative_size"].hist(bins=20)
+fig = ax.get_figure()
+fig.savefig('features/relativehisto.pdf')
+
+# Sanity check for position features
+print(TICK_SIZE)
+print((anchor_events_with_mbp["ts_event"] - anchor_events_with_mbp["ts_book"]).describe())
+print(features_df.nlargest(10, "distance_ticks"))
+print(features_df["distance_ticks"].quantile([0.5, 0.75, 0.9, 0.95, 0.99]))
+row = features_df.nlargest(1, "distance_ticks").iloc[0]
+print(row[[
+    "order_id",
+    "side",
+    "anchor_price",
+    "best_bid",
+    "best_ask",
+    "distance_ticks"
+]])
+print(abs(anchor_price - row["best_bid"]) / TICK_SIZE)
+ax = features_df["distance_ticks"].hist(bins=50)
+fig = ax.get_figure()
+fig.savefig('features/distancehisto.pdf')
+print(features_df[["distance_ticks", "spread_normalized_distance", "depth_volume", "depth_ratio"]].describe())
+
+# Sanity check for impact features
+print(mbp10[["ts_book", "bid_px_00", "ask_px_00", "midprice"]].head(20))
+print(mbp10["midprice"].describe())
+print(mbp10[["bid_px_00", "ask_px_00", "midprice"]].isna().sum())
+print(features_df["midprice_change_50ms"].describe())
+print(features_df["midprice_change_200ms"].describe())
+print(features_df["midprice_change_1000ms"].describe())
+print(features_df[features_df["midprice_change_50ms"] == features_df["midprice_change_50ms"].min()])
+print(features_df["signed_impact"].describe())
+print(features_df["post_trade_count"].describe())
+print(features_df["order_book_imbalance_shift"].describe())
+print(features_df["order_book_imbalance_shift"].abs().quantile([0.5, 0.75, 0.9, 0.99]))
+print(features_df["spread_change_ticks"].describe())
+print(features_df["spread_change_ticks"].abs().quantile([0.5, 0.75, 0.9, 0.99]))
+print(features_df.nlargest(3, "spread_change_ticks")[["order_id","best_bid", "best_ask", "spread_change_ticks"]])
+print(features_df["midprice_change_during"].describe())'''

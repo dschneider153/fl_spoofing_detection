@@ -5,21 +5,16 @@ import pandas as pd
 import zstandard as zstd # type: ignore
 
 def decompress_zst_to_csv(zst_file_path, output_csv_path):
-    dctx = zstd.ZstdDecompressor()
-    data_list = []
-
     with open(zst_file_path, 'rb') as compressed:
+        dctx = zstd.ZstdDecompressor()
         with dctx.stream_reader(compressed) as reader:
             text_stream = io.TextIOWrapper(reader, encoding='utf-8')
-            csv_reader = csv.reader(text_stream)
-            for row in csv_reader:
-                data_list.append(row)
-
-    df = pd.DataFrame(data_list)
+            df = pd.read_csv(text_stream)
     df.to_csv(output_csv_path, index=False)
+    print(f"Done: {output_csv_path}, rows: {len(df)}")
 
-zst_file = 'data/MBP-10/zst/combinedmbp-10.csv.zst'
-os_output_path = os.path.join('data', 'MBP-10', 'csv', 'combined_output_january.csv')
+zst_file = 'data/NVIDIA_TEST/xnas-itch-20260130.mbp-10.csv.zst'
+os_output_path = os.path.join('data', 'NVIDIA_TEST', 'nvidia_mbp-10.csv')
 
 decompress_zst_to_csv(zst_file, os_output_path)
 

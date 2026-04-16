@@ -9,6 +9,12 @@ from flwr.clientapp import ClientApp
 from flwr.common.config import unflatten_dict
 
 from quickstart_xgboost.task import load_data, replace_keys, get_scale_pos_weight
+from sklearn.metrics import (
+    precision_score,
+    recall_score,
+    f1_score,
+    precision_recall_curve,
+)
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -77,30 +83,39 @@ def train(msg: Message, context: Context) -> Message:
 
 @app.evaluate()
 def evaluate(msg: Message, context: Context) -> Message:
-    # Load model and data
     partition_id = context.node_config["partition-id"]
     num_partitions = context.node_config["num-partitions"]
     _, valid_dmatrix, _, num_val = load_data(partition_id, num_partitions)
 
-    # Load config
+    if num_val == 0:
+        metrics = {"precision": 0.0, "recall": 0.0, "f1": 0.0, "num-examples": 0}
+        metric_record = MetricRecord(metrics)
+        return Message(content=RecordDict({"metrics": metric_record}), reply_to=msg)
+
     cfg = replace_keys(unflatten_dict(context.run_config))
     params = cfg["params"]
 
-    # Load global model
     bst = xgb.Booster(params=params)
     global_model = bytearray(msg.content["arrays"]["0"].numpy().tobytes())
     bst.load_model(global_model)
 
-    # Run evaluation
-    eval_results = bst.eval_set(
-        evals=[(valid_dmatrix, "valid")],
-        iteration=bst.num_boosted_rounds() - 1,
-    )
-    aucpr = float(eval_results.split("\t")[1].split(":")[1])
+    # These two lines were missing
+    y_pred_proba = bst.predict(valid_dmatrix)
+    y_true = valid_dmatrix.get_label()
 
-    # Construct and return reply Message
+    precision_arr, recall_arr, thresholds = precision_recall_curve(y_true, y_pred_proba)
+    f1_arr = 2 * (precision_arr[:-1] * recall_arr[:-1]) / (precision_arr[:-1] + recall_arr[:-1] + 1e-10)
+    best_threshold = thresholds[np.argmax(f1_arr)]
+    y_pred = (y_pred_proba >= best_threshold).astype(int)
+
+    client_precision = float(precision_score(y_true, y_pred, zero_division=0))
+    client_recall = float(recall_score(y_true, y_pred, zero_division=0))
+    client_f1 = float(f1_score(y_true, y_pred, zero_division=0))
+
     metrics = {
-        "aucpr": aucpr,
+        "precision": client_precision,
+        "recall": client_recall,
+        "f1": client_f1,
         "num-examples": num_val,
     }
     metric_record = MetricRecord(metrics)

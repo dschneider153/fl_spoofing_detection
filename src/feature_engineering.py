@@ -17,7 +17,7 @@ def clean_csv(path, index_col=None):
                 df[col] = converted
     return df
 
-mbo_csv_path = os.path.join('data', 'MBO', 'csv', 'combined_output_january.csv')
+mbo_csv_path = os.path.join('data', 'NVIDIA_TEST', 'nvidia_mbo.csv')
 mbo = clean_csv(mbo_csv_path)
 mbo = mbo.astype({
         "ts_recv": "string",
@@ -36,7 +36,7 @@ mbo = mbo.astype({
         "symbol": "category",
     })
 
-mbp10_csv_path = os.path.join('data', 'MBP-10', 'csv', 'combined_output_january.csv')
+mbp10_csv_path = os.path.join('data', 'NVIDIA', 'nvidia_mbp-10.csv')
 mbp10 = clean_csv(mbp10_csv_path)
 
 mbo = mbo.sort_values("ts_event")
