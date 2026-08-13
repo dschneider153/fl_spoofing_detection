@@ -49,6 +49,7 @@ dependencies = [
     "pyparsing==3.3.2",
     "python-dateutil==2.9.0.post0",
     "python-dotenv==1.2.1",
+    "ruff>=0.16.3",
     "scikit-learn==1.8.0",
     "scipy==1.17.1",
     "seaborn==0.13.2",
@@ -68,3 +69,41 @@ dependencies = [
     "zstandard==0.25.0",
     "zstd==1.5.7.3",
 ]
+
+[tool.ruff]
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
+# Same as Black.
+line-length = 88
+indent-width = 4
+
+# For Python 3.11
+target-version = "py311"

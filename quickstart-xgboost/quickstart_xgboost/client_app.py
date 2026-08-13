@@ -104,7 +104,11 @@ def evaluate(msg: Message, context: Context) -> Message:
     y_true = valid_dmatrix.get_label()
 
     precision_arr, recall_arr, thresholds = precision_recall_curve(y_true, y_pred_proba)
-    f1_arr = 2 * (precision_arr[:-1] * recall_arr[:-1]) / (precision_arr[:-1] + recall_arr[:-1] + 1e-10)
+    f1_arr = (
+        2
+        * (precision_arr[:-1] * recall_arr[:-1])
+        / (precision_arr[:-1] + recall_arr[:-1] + 1e-10)
+    )
     best_threshold = thresholds[np.argmax(f1_arr)]
     y_pred = (y_pred_proba >= best_threshold).astype(int)
 

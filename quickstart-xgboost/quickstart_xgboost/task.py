@@ -14,25 +14,29 @@ CLEAN_FEATURES = [
     "initial_size",
     "anchor_price",
     "best_bid",
-    "best_ask", 
+    "best_ask",
     "distance_ticks",
     "spread_normalized_distance",
     "relative_size",
     "pre_add_count",
     "pre_cancel_count",
     "depth_ratio",
-    "depth_volume"
+    "depth_volume",
 ]
+
 
 def load_dataframe():
     global _cached_df
     if _cached_df is None:
-        _cached_df = pd.read_csv(DATA_PATH, delimiter=',')
+        _cached_df = pd.read_csv(DATA_PATH, delimiter=",")
         _cached_df["ts_event"] = pd.to_datetime(_cached_df["ts_event"])
         _cached_df = _cached_df.sort_values("ts_event").reset_index(drop=True)
         _cached_df["side"] = _cached_df["side"].map({"bid": 0, "ask": 1})
-        _cached_df = _cached_df.drop(columns=["order_id", "spoof_prob"], errors="ignore")
+        _cached_df = _cached_df.drop(
+            columns=["order_id", "spoof_prob"], errors="ignore"
+        )
     return _cached_df
+
 
 def load_data(partition_id: int, num_clients: int):
     # Load dataframe with function
@@ -43,7 +47,7 @@ def load_data(partition_id: int, num_clients: int):
     n = len(df)
     partition_size = n // num_clients
     start = partition_id * partition_size
-    end = start + partition_size if partition_id < num_clients - 1 else n  
+    end = start + partition_size if partition_id < num_clients - 1 else n
     partition = df.iloc[start:end].copy()
 
     # Now split partitions into Train and Test (not a seperate function)
@@ -67,6 +71,7 @@ def load_data(partition_id: int, num_clients: int):
 
     return train_dmatrix, valid_dmatrix, len(y_train), len(y_test)
 
+
 # scale_pos_weight needs to be calculated for each partition, especially when there are different instruments
 def get_scale_pos_weight(partition_id: int, num_clients: int) -> float:
     # Same logic as load_data
@@ -74,7 +79,7 @@ def get_scale_pos_weight(partition_id: int, num_clients: int) -> float:
     n = len(df)
     partition_size = n // num_clients
     start = partition_id * partition_size
-    end = start + partition_size if partition_id < num_clients - 1 else n  
+    end = start + partition_size if partition_id < num_clients - 1 else n
     partition = df.iloc[start:end]
 
     split_date = partition["ts_event"].quantile(0.75)
@@ -83,6 +88,7 @@ def get_scale_pos_weight(partition_id: int, num_clients: int) -> float:
     n_pos = y_train.sum()
     n_neg = len(y_train) - n_pos
     return float(n_neg / n_pos) if n_pos > 0 else 1.0
+
 
 def replace_keys(input_dict, match="-", target="_"):
     """Recursively replace match string with target string in dictionary keys."""

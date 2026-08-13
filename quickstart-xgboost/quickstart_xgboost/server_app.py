@@ -2,7 +2,12 @@
 
 import numpy as np
 import xgboost as xgb
-from sklearn.metrics import f1_score, precision_recall_curve, precision_score, recall_score
+from sklearn.metrics import (
+    f1_score,
+    precision_recall_curve,
+    precision_score,
+    recall_score,
+)
 from flwr.app import ArrayRecord, Context
 from flwr.common.config import unflatten_dict
 from flwr.serverapp import Grid, ServerApp
@@ -68,18 +73,21 @@ def main(grid: Grid, context: Context) -> None:
 
     # Same F1-evaluation block as in baseline
     precision, recall, thresholds = precision_recall_curve(y_test, y_pred_proba)
-    f1_scores = 2 * (precision[:-1] * recall[:-1]) / (precision[:-1] + recall[:-1] + 1e-10)
+    f1_scores = (
+        2 * (precision[:-1] * recall[:-1]) / (precision[:-1] + recall[:-1] + 1e-10)
+    )
     best_threshold = thresholds[np.argmax(f1_scores)]
     print("Best threshold:", best_threshold)
     y_pred = (y_pred_proba >= best_threshold).astype(int)
-
 
     test_precision = precision_score(y_test, y_pred)
     test_recall = recall_score(y_test, y_pred)
     test_f1 = f1_score(y_test, y_pred)
 
     print("\n--- Final Global Model Evaluation ---")
-    print(f"Final evaluation --> Precision: {test_precision:.4f}, Recall: {test_recall:.4f}, F1: {test_f1:.4f}")
+    print(
+        f"Final evaluation --> Precision: {test_precision:.4f}, Recall: {test_recall:.4f}, F1: {test_f1:.4f}"
+    )
 
     # Save model
     print("\nSaving final model to disk...")
