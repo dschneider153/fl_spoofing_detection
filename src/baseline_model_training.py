@@ -1,15 +1,13 @@
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
-    precision_score,
-    recall_score,
     f1_score,
     precision_recall_curve,
+    precision_score,
+    recall_score,
 )
-from sklearn.model_selection import train_test_split, TimeSeriesSplit
-import xgboost as xgb
-from xgboost import XGBClassifier, plot_importance
-import matplotlib.pyplot as plt
+from sklearn.model_selection import TimeSeriesSplit
+from xgboost import XGBClassifier
 
 # Loading data and mapping the bid/ask side to a number
 df = pd.read_csv("data/Training and Testing/test_january.csv")

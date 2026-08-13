@@ -1,7 +1,6 @@
+import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-import matplotlib.pyplot as plt
-
 
 df = pd.read_csv("features/features.csv", index_col=0)
 df = df.drop("order_id", axis=1)

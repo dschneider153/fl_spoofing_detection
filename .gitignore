@@ -434,3 +434,7 @@ src/heuristics_labeling.py
 
 final_model.json
 federated_final_model.json
+
+.ruff_cache
+
+.vscode

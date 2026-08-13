@@ -1,14 +1,10 @@
+import numpy as np
+import pandas as pd
+from snorkel import labeling as lbl
 from snorkel.labeling import (
-    LabelingFunction,
     labeling_function,
-    PandasLFApplier,
-    LFAnalysis,
 )
 from snorkel.labeling.model import LabelModel
-from snorkel import labeling as lbl
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 
 df = pd.read_csv("features/features_january.csv")
 df["ts_event"] = pd.to_datetime(df["ts_event"])
